@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#5e5b5b"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/mobileNumberEditText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter Mobile Number"
+        android:inputType="phone"
+        android:padding="12dp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#856565"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/editSaveButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Edit"
+        android:layout_below="@id/mobileNumberEditText"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="#4CAF50"/>
+
+    <Button
+        android:id="@+id/toggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start Sending Data"
+        android:layout_below="@id/editSaveButton"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#4CAF50"/>
+
+    <TextView
+        android:id="@+id/sensorDataTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sensor Data will appear here"
+        android:layout_below="@id/toggleButton"
+        android:layout_marginTop="20dp"
+        android:textColor="#ffffff" />
+
+</RelativeLayout>
