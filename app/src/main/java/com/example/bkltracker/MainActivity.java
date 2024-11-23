@@ -18,6 +18,26 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.os.Build;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.app.NotificationCompat;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import org.jetbrains.annotations.NotNull;
+import java.io.IOException;
+import java.util.HashMap;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -44,10 +64,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private double latitude, longitude, speed;
 
     private String mobileNumber;
-    private Handler handler = new Handler();
+    private Handler handler;
+    //private Handler handler = new Handler();
     private Runnable dataSender;
 
     private SharedPreferences sharedPreferences;
+
+    private static final String BEDS_CLUSTER_URL = "https://accident-cisl.onrender.com/beds";
+    private static final String CHANNEL_ID = "accident_notifications";
+    private static final int REQUEST_CODE_POST_NOTIFICATIONS = 1;
+
+    private TextView notificationText;
+    private EditText inputNumber;
+    private Button sendButton;
+
+    private OkHttpClient client;
+
+    private HashMap<String, Object> currentAccidentData; // To store active accident data
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +110,31 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         toggleButton.setOnClickListener(v -> toggleDataSending());
         editSaveButton.setOnClickListener(v -> toggleEditSaveNumber());
+
+        // Initialize views
+        notificationText = findViewById(R.id.notificationText);
+        inputNumber = findViewById(R.id.inputNumber);
+        sendButton = findViewById(R.id.sendButton);
+        handler = new Handler();
+        client = new OkHttpClient();
+
+        // Check and request POST_NOTIFICATIONS permission
+        checkNotificationPermission();
+
+        // Create notification channel
+        createNotificationChannel();
+
+        // Poll for accident data every 2 seconds
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                fetchAccidentData();
+                handler.postDelayed(this, 2000); // Repeat every 2 seconds
+            }
+        }, 2000);
+
+        // Handle Send button click
+        sendButton.setOnClickListener(v -> sendBedsData());
     }
 
     private void registerSensors() {
@@ -173,6 +231,137 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }).start();
     }
 
+    private void checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        REQUEST_CODE_POST_NOTIFICATIONS);
+            }
+        }
+    }
+
+    private void fetchAccidentData() {
+        Request request = new Request.Builder()
+                .url("https://accident-cisl.onrender.com/accident-status") // Use the new endpoint
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                Log.e("AccidentData", "Error fetching accident status", e);
+            }
+
+            @Override
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    String responseBody = response.body().string();
+                    Log.d("AccidentData", responseBody);
+
+                    Gson gson = new Gson();
+                    HashMap<String, Object> accident = gson.fromJson(responseBody, new TypeToken<HashMap<String, Object>>() {}.getType());
+
+
+                    // Only process if accident status is true
+                    if (accident != null) {
+                        currentAccidentData = accident;
+                        showAccidentNotification();
+                    }
+                } else if (response.code() == 404) {
+                    Log.d("AccidentData", "No active accidents");
+                }
+            }
+        });
+    }
+
+
+    private void showAccidentNotification() {
+        runOnUiThread(() -> {
+            notificationText.setText("Accident detected nearby!");
+            inputNumber.setVisibility(View.VISIBLE);
+            sendButton.setVisibility(View.VISIBLE);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentTitle("Accident Alert")
+                    .setContentText("An accident has been detected nearby!")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            manager.notify(1, builder.build());
+        });
+    }
+
+    private void sendBedsData() {
+        String numberInput = inputNumber.getText().toString();
+        if (numberInput.isEmpty() || currentAccidentData == null) {
+            Toast.makeText(this, "Enter a valid number of beds", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int bedsNumber = Integer.parseInt(numberInput);
+        currentAccidentData.put("status", true);
+        currentAccidentData.put("no_of_beds", new int[]{bedsNumber});
+
+        String jsonBody = new Gson().toJson(currentAccidentData);
+
+        RequestBody body = RequestBody.create(
+                jsonBody,
+                MediaType.get("application/json")
+        );
+
+        Request request = new Request.Builder()
+                .url(BEDS_CLUSTER_URL)
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                Log.e("BedsData", "Error sending beds data", e);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Failed to send beds data", Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(@NotNull Call call, @NotNull Response response) {
+                if (response.isSuccessful()) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, "Beds data sent successfully!", Toast.LENGTH_SHORT).show();
+                        inputNumber.setVisibility(View.GONE);
+                        sendButton.setVisibility(View.GONE);
+                        notificationText.setText("No accidents detected nearby");
+                    });
+                }
+            }
+        });
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Accident Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == REQUEST_CODE_POST_NOTIFICATIONS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Notification permission granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
 
 
 
@@ -207,4 +396,3 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 }
-
