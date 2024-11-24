@@ -1,4 +1,5 @@
 package com.example.bkltracker;
+
 import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -22,15 +23,21 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
 import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.app.NotificationCompat;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
 import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.util.HashMap;
+
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
@@ -48,6 +55,7 @@ import org.json.JSONObject;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener {
 
@@ -242,6 +250,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+//        double latDiff = lat2 - lat1;
+//        double lonDiff = lon2 - lon1;
+//
+//        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111139; // Approx. conversion to meters
+        return 400.00;
+    }
+
     private void fetchAccidentData() {
         Request request = new Request.Builder()
                 .url("https://accident-cisl.onrender.com/accident-status") // Use the new endpoint
@@ -253,29 +269,66 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 Log.e("AccidentData", "Error fetching accident status", e);
             }
 
+            //            @Override
+//            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
+//                if (response.isSuccessful()) {
+//                    String responseBody = response.body().string();
+//                    Log.d("AccidentData", responseBody);
+//
+//                    Gson gson = new Gson();
+//                    HashMap<String, Object> accident = gson.fromJson(responseBody, new TypeToken<HashMap<String, Object>>() {}.getType());
+//
+//                    // Only process if accident status is true
+//                    if (accident != null) {
+//                        currentAccidentData = accident;
+//                        showAccidentNotification();
+//                    }
+//
+//                } else if (response.code() == 404) {
+//                    Log.d("AccidentData", "No active accidents");
+//                }
+//            }
             @Override
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 if (response.isSuccessful()) {
                     String responseBody = response.body().string();
-                    Log.d("AccidentData", responseBody);
+                    currentAccidentData = new Gson().fromJson(responseBody, new TypeToken<HashMap<String, Object>>() {
+                    }.getType());
 
-                    Gson gson = new Gson();
-                    HashMap<String, Object> accident = gson.fromJson(responseBody, new TypeToken<HashMap<String, Object>>() {}.getType());
+                    if (currentAccidentData != null) {
+                        double accidentLat = (double) currentAccidentData.get("lat");
+                        double accidentLong = (double) currentAccidentData.get("long");
 
 
-                    // Only process if accident status is true
-                    if (accident != null) {
-                        currentAccidentData = accident;
-                        showAccidentNotification();
+                        double distance = calculateDistance(latitude, longitude, accidentLat, accidentLong);
+
+                        if (distance <= 500) {
+                            showAccidentNotification();
+                        }
                     }
-                } else if (response.code() == 404) {
-                    Log.d("AccidentData", "No active accidents");
                 }
             }
+
         });
     }
 
 
+    //    private void showAccidentNotification() {
+//        runOnUiThread(() -> {
+//            notificationText.setText("Accident detected nearby!");
+//            inputNumber.setVisibility(View.VISIBLE);
+//            sendButton.setVisibility(View.VISIBLE);
+//
+//            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+//                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+//                    .setContentTitle("Accident Alert")
+//                    .setContentText("An accident has been detected nearby!")
+//                    .setPriority(NotificationCompat.PRIORITY_HIGH);
+//
+//            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+//            manager.notify(1, builder.build());
+//        });
+//    }
     private void showAccidentNotification() {
         runOnUiThread(() -> {
             notificationText.setText("Accident detected nearby!");
@@ -285,13 +338,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_dialog_alert)
                     .setContentTitle("Accident Alert")
-                    .setContentText("An accident has been detected nearby!")
+                    .setContentText("An accident has been detected within 100 meters!")
                     .setPriority(NotificationCompat.PRIORITY_HIGH);
 
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationManagerCompat manager = NotificationManagerCompat.from(this);
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return;
+            }
             manager.notify(1, builder.build());
-        });
-    }
+    });
+}
 
     private void sendBedsData() {
         String numberInput = inputNumber.getText().toString();
