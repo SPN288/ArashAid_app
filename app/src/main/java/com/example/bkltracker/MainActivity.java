@@ -216,6 +216,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 jsonObject.put("gyroY", gyroY);
                 jsonObject.put("gyroZ", gyroZ);
 
+//                JSONObject jsonObject = new JSONObject();
+//                jsonObject.put("mobileNumber", 696969696);
+//                jsonObject.put("latitude", 2.450355);
+//                jsonObject.put("longitude", -76.6264806);
+//                jsonObject.put("speed", 4.50036);
+//                jsonObject.put("accelX", 0.2246864);
+//                jsonObject.put("accelY", 1.1108867);
+//                jsonObject.put("accelZ", 9.9796008);
+//                jsonObject.put("gyroX", -4.042993);
+//                jsonObject.put("gyroY", 1.1893435);
+//                jsonObject.put("gyroZ", -19.9595413);
+
                 Log.d("DataTransmission", "Sending JSON: " + jsonObject.toString()); // Log the data here
 
                 URL url = new URL("https://accident-cisl.onrender.com/upload_sensor_data");
